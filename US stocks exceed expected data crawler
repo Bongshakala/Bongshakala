@@ -1,0 +1,128 @@
+import json
+import re
+import requests
+from bs4 import BeautifulSoup
+from multiprocessing.dummy import Pool as ThreadPool
+import pandas as pd
+import numpy as np
+
+
+stock_list=[]
+#pages={"NQ":164,"SP500":26,"DJ":2}
+page=[164,26,2]
+for i in range(len(page)):
+    markets=i+1
+    market_list=[]
+    for i2 in range(int(page[i])):
+        pages=i2+1
+        url="https://stock.finance.sina.com.cn/usstock/api/jsonp.php/IO.XSRV2.CallbackList['fTqwo9s8$wLka1yh']/US_CategoryService.getChengfen?page="+str(pages)+"&num=20&sort=&asc=0&market=&id=&type="+ str(markets)
+        ## Real URL is hidden in js
+        response = requests.get(url).text
+        symbol = re.findall('"symbol":"(.*?)","cname"',response,re.S)
+        market_list.extend(symbol)
+    stock_list.append(market_list)
+print("Finished，data from%dmarkets"% len(stock_list)) 
+stock_list
+
+def craw_yahoo(code1):
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36'
+    }
+    url_yahoo="https://uk.finance.yahoo.com/quote/"+code+"?p="+code+"&.tsrc=fin-srch"
+    try:
+        response = requests.get(url_yahoo,timeout=(10,15),headers=headers)
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        cap=soup.find('td',{'data-test':'MARKET_CAP-value'}).text
+        cap_amount=['B','T'] 
+        if cap[-1] in cap_amount: ## above Billion， Trillion
+            lab_cap = cap
+        else:
+            smallcap.append(code)
+            return smallcap
+    
+        surprise_url="https://uk.finance.yahoo.com/quote/"+code+"/analysis?p="+code+"&.tsrc=fin-tre-srch"
+        surprise_res = requests.get(surprise_url,timeout=(10,15),headers=headers)
+        surprise_soup=BeautifulSoup(surprise_res.text,'lxml')
+        surprise_con=surprise_soup.find('section',{'data-test':'qsp-analyst'})
+
+        a=surprise_con.find_all("tbody") 
+        for i in a:  
+            if 'Surprise' in str(i):
+                con=i.get_text()
+                list_con=con.split(sep='%')   
+             
+                if float(list_con[-2])>=20 :
+                    index=float(list_con[-2])
+                else:
+                    no_surprise.append(code)
+                    return no_surprise  
+            else:
+                next  
+        soup = BeautifulSoup(response.text, 'lxml')
+        parse(soup,lab_cap,index) 
+        return item_list  
+    
+    except AttributeError:      
+        no_info.append(code)
+    except ValueError:           
+        no_surprise.append(code)
+    except Exception as e:
+        print('Program failed：',e)
+        list_failed.append(code)
+        
+        item_list = []  
+
+def parse(soup,lab_cap,index):
+    item = {}
+
+
+    #company
+    lab_name=soup.find('h1',{'class':'D(ib) Fz(18px)'}).text 
+    #price
+    lab_price=soup.find('span',{'class':'Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)'}).text
+    
+    
+    #industry
+    profile_url = "https://finance.yahoo.com/quote/"+code+"/profile?p="+code
+
+    industry_response = requests.get(profile_url,timeout=(10,15)).text
+    industry_soup=BeautifulSoup(industry_response,'lxml')
+    try:
+        industry= industry_soup.find('p',{'class':'D(ib) Va(t)'}).text  #行业
+        label_ind=industry.split(sep='Full Time Employees')
+        label_ind=label_ind[0]
+        label_ind=label_ind.split(sep='Industry:\xa0')
+        label_ind=str(label_ind[-1])  
+    except:
+        label_ind= "None" 
+    
+    item = {"name":lab_name,"price":lab_price,"cap":lab_cap,"industry":label_ind,"Surprise":index}            
+    item_list.append(item)
+    print(item)
+    
+    
+def format_translator(data):
+    df = pd.DataFrame(data,columns=['name','price$','market_cap$','industry','Surprise %'],dtype=np.object) 
+    df = df.dropna(axis=0, how='any') 
+    df['Surprise']=df[df.columns[-1]].astype('float')
+    #df=df[df['Surprise'] >=20]
+    #print(df)
+    df.to_csv("List of result.csv",encoding="utf_8_sig")
+
+
+if __name__=='__main__':
+    #stock_list=[['MARA'],['BTBT'],['JPM']]  # for test
+    cnt_code=0    
+    smallcap=[]   
+    no_surprise=[] 
+    no_info=[]     
+    list_failed=[] 
+
+    for i in stock_list:
+        for code in i:
+            craw_yahoo(code)
+            cnt_code+=1    
+            print('clawed{}times,inclouding：{}small_cap,{}no analyst evaluation,{}no information in yahoo,{}success，{}failled'.format(cnt_code,len(smallcap),len(no_surprise),len(no_info),len(item_list),len(list_failed)), end='\r')
+    
+    format_translator(item_list)
