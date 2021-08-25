@@ -1,0 +1,20 @@
+import json
+import re
+import requests
+from bs4 import BeautifulSoup
+
+stock_list=[]
+#pages={"NQ":164,"SP500":26,"DJ":2}
+page=[164,26,2]
+for i in range(len(page)):
+    markets=i+1
+    market_list=[]
+    for i2 in range(int(page[i])):
+        pages=i2+1
+        url="https://stock.finance.sina.com.cn/usstock/api/jsonp.php/IO.XSRV2.CallbackList['fTqwo9s8$wLka1yh']/US_CategoryService.getChengfen?page="+str(pages)+"&num=20&sort=&asc=0&market=&id=&type="+ str(markets)
+        response = requests.get(url).text
+        symbol = re.findall('"symbol":"(.*?)","cname"',response,re.S)
+        market_list.extend(symbol)
+    stock_list.append(market_list)
+print("爬取完成，共爬取%d条数据"% len(stock_list))
+stock_list
